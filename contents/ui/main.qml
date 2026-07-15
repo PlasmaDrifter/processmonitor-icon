@@ -6,6 +6,7 @@ import org.kde.kirigami as Kirigami
 
 PlasmoidItem {
     id: root
+    preferredRepresentation: compactRepresentation
 
     readonly property color iconColor:
         Plasmoid.configuration.baseIconColor.length > 0
