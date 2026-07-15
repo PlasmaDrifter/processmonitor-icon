@@ -2,7 +2,7 @@
 
 A KDE Plasma panel widget that shows a live list of running applications sorted by CPU or memory usage, with the ability to kill any process directly from the panel.
 
-![processormonitor](precessor.png)
+![processormonitor](processor.png)
 ![processormonitor](desktop-2.png)
 
 ## Features
@@ -24,7 +24,7 @@ A KDE Plasma panel widget that shows a live list of running applications sorted 
 
 ```bash
 cd ~/.local/share/plasma/plasmoids/
-git clone https://github.com/PlasmaDrifter/precessmonitor-icon local.widget.precessmonitor-icon
+git clone https://github.com/PlasmaDrifter/processmonitor-icon local.widget.processmonitor-icon
 ```
 
 Then right-click your panel → **Add Widgets** → search for **Processor Utility**.
