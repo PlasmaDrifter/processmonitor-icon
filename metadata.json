@@ -11,7 +11,7 @@
         "Icon": "utilities-system-monitor",
         "Id": "local.widget.processmonitor-icon",
         "Name": "Procossor Utility",
-        "Version": "2.0"
+        "Version": "2.0.1"
     },
     "X-Plasma-API-Minimum-Version": "6.0",
     "X-Plasma-MainScript": "ui/main.qml"
