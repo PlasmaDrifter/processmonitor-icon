@@ -50,7 +50,7 @@ Item {
     Process.ApplicationDataModel {
         id: appModel
         enabledAttributes: ["appName", "iconName", "usage", "memory"]
-        enabled: true
+        enabled: root.Window.window ? root.Window.window.visible : false
 
         cgroupMapping: {
             "session.slice":                        "services",
@@ -77,22 +77,17 @@ Item {
         }
 
         Component.onCompleted: root.rebuildRows()
-        onModelReset:    root.rebuildRows()
-        onRowsInserted:  root.rebuildRows()
-        onRowsRemoved:   root.rebuildRows()
-        onDataChanged:   root.rebuildRows()
+        onModelReset:   if (Plasmoid.expanded) root.rebuildRows()
+        onRowsInserted: if (Plasmoid.expanded) root.rebuildRows()
+        onRowsRemoved:  if (Plasmoid.expanded) root.rebuildRows()
     }
 
     Timer {
         interval: Math.max(1500, Plasmoid.configuration.refreshInterval * 1000)
-        running: true
+        running: root.Window.window ? root.Window.window.visible : false
         repeat: true
         triggeredOnStart: true
-        onTriggered: {
-            appModel.enabled = false
-            Qt.callLater(() => { appModel.enabled = true })
-            root.rebuildRows()
-        }
+        onTriggered: root.rebuildRows()
     }
 
     Process.ProcessController {
@@ -337,7 +332,7 @@ Item {
                         anchors.right: parent.right
                         anchors.bottom: parent.bottom
                         height: 1
-                        color: Kirigami.Theme.separatorColor
+                        color: Kirigami.Theme.textColor
                         opacity: 0.15
                     }
                 }
@@ -357,7 +352,7 @@ Item {
                 orientation: Qt.Vertical
                 size: listView.visibleArea.heightRatio
                 position: listView.visibleArea.yPosition
-                active: listView.moving || listView.hovered
+                active: listView.moving || vertScrollBar.hovered || vertScrollBar.pressed
                 policy: QQC2.ScrollBar.AsNeeded
                 onPositionChanged: {
                     if (active) listView.contentY = position * listView.contentHeight
