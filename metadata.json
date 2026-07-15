@@ -9,8 +9,8 @@
         "Category": "System Information",
         "Description": "Live application list with CPU/Memory usage and the ability to quit apps, directly from the panel.",
         "Icon": "utilities-system-monitor",
-        "Id": "local.widget.precessmonitor-icon",
-        "Name": "Processor Utility",
+        "Id": "local.widget.processmonitor-icon",
+        "Name": "Procossor Utility",
         "Version": "2.0"
     },
     "X-Plasma-API-Minimum-Version": "6.0",
