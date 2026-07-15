@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- Simplified solid-fill monitor glyph: screen + stand, no internal
+     waveform/detail. Designed for Kirigami.Icon isMask:true so it can be
+     tinted at runtime (magenta / light gray / coral / teal). -->
+<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 16 16">
+    <rect x="1.5" y="2" width="13" height="8.5" rx="1" fill="#232629"/>
+    <rect x="6.5" y="11" width="3" height="1.6" fill="#232629"/>
+    <rect x="4" y="13" width="8" height="1.3" rx="0.65" fill="#232629"/>
+</svg>
