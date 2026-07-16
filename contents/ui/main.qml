@@ -1,5 +1,6 @@
 import QtQuick
 import QtQuick.Layouts
+import QtQuick.Controls as QQC2
 
 import org.kde.plasma.plasmoid
 import org.kde.kirigami as Kirigami
@@ -16,12 +17,14 @@ PlasmoidItem {
     readonly property bool colorizeIcon: Plasmoid.configuration.colorizeIcon
 
     Plasmoid.title: i18n("Processor Utility")
+    toolTipItem: Item {}
 
     compactRepresentation: MouseArea {
         Layout.minimumWidth:    Kirigami.Units.iconSizes.small
         Layout.minimumHeight:   Kirigami.Units.iconSizes.small
         Layout.preferredWidth:  Kirigami.Units.iconSizes.medium
         Layout.preferredHeight: Kirigami.Units.iconSizes.medium
+        
         onClicked: root.expanded = !root.expanded
 
         Kirigami.Icon {

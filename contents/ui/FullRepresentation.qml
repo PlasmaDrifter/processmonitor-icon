@@ -47,6 +47,22 @@ Item {
     property int cpuWidth:   80
     property int memWidth:   100   // back to normal (no debug)
 
+    readonly property bool isWindowVisible: root.Window.window ? root.Window.window.visible : false
+    property bool firstUpdatePending: false
+    onIsWindowVisibleChanged: {
+        if (isWindowVisible) {
+            firstUpdatePending = true
+        }
+    }
+
+    Timer {
+        id: firstUpdateTimer
+        interval: 100
+        running: false
+        repeat: false
+        onTriggered: root.rebuildRows()
+    }
+
     Process.ApplicationDataModel {
         id: appModel
         enabledAttributes: ["appName", "iconName", "usage", "memory"]
@@ -80,6 +96,12 @@ Item {
         onModelReset:   if (Plasmoid.expanded) root.rebuildRows()
         onRowsInserted: if (Plasmoid.expanded) root.rebuildRows()
         onRowsRemoved:  if (Plasmoid.expanded) root.rebuildRows()
+        onDataChanged: {
+            if (root.firstUpdatePending) {
+                root.firstUpdatePending = false
+                firstUpdateTimer.restart()
+            }
+        }
     }
 
     Timer {
