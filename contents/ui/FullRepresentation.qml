@@ -17,7 +17,7 @@ Item {
 
     // row height mirrors the delegate formula
     readonly property int rowH:     Kirigami.Units.iconSizes.small
-                                    + Kirigami.Units.smallSpacing * 4
+    + Kirigami.Units.smallSpacing * 4
     readonly property int headerH:  Math.ceil(Kirigami.Units.gridUnit * 1.8)
     readonly property int marginsH: Kirigami.Units.largeSpacing * 3  // top + bottom + gap
 
@@ -28,7 +28,7 @@ Item {
     readonly property int popupHeight: {
         if (rows.length === 0)
             return Kirigami.Units.gridUnit * 20          // loading fallback
-        return marginsH + headerH + rows.length * rowH   // exact fit
+            return marginsH + headerH + rows.length * rowH   // exact fit
     }
 
     Layout.preferredHeight: popupHeight
@@ -217,10 +217,10 @@ Item {
                 onSortClicked: {
                     if (root.sortColumn === "name")
                         root.sortAscending = !root.sortAscending
-                    else {
-                        root.sortColumn = "name"
-                        root.sortAscending = false
-                    }
+                        else {
+                            root.sortColumn = "name"
+                            root.sortAscending = false
+                        }
                 }
             }
 
@@ -232,10 +232,10 @@ Item {
                 onSortClicked: {
                     if (root.sortColumn === "cpu")
                         root.sortAscending = !root.sortAscending
-                    else {
-                        root.sortColumn = "cpu"
-                        root.sortAscending = false
-                    }
+                        else {
+                            root.sortColumn = "cpu"
+                            root.sortAscending = false
+                        }
                 }
             }
 
@@ -247,10 +247,10 @@ Item {
                 onSortClicked: {
                     if (root.sortColumn === "mem")
                         root.sortAscending = !root.sortAscending
-                    else {
-                        root.sortColumn = "mem"
-                        root.sortAscending = false
-                    }
+                        else {
+                            root.sortColumn = "mem"
+                            root.sortAscending = false
+                        }
                 }
             }
 

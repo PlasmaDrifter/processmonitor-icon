@@ -10,21 +10,22 @@ PlasmoidItem {
     preferredRepresentation: compactRepresentation
 
     readonly property color iconColor:
-        Plasmoid.configuration.baseIconColor.length > 0
-        ? Plasmoid.configuration.baseIconColor
-        : "#c73aa8"
+    Plasmoid.configuration.baseIconColor.length > 0
+    ? Plasmoid.configuration.baseIconColor
+    : "#c73aa8"
 
     readonly property bool colorizeIcon: Plasmoid.configuration.colorizeIcon
 
     Plasmoid.title: i18n("Processor Utility")
-    toolTipItem: Item {}
+    toolTipMainText: ""
+    toolTipSubText: ""
 
     compactRepresentation: MouseArea {
         Layout.minimumWidth:    Kirigami.Units.iconSizes.small
         Layout.minimumHeight:   Kirigami.Units.iconSizes.small
         Layout.preferredWidth:  Kirigami.Units.iconSizes.medium
         Layout.preferredHeight: Kirigami.Units.iconSizes.medium
-        
+
         onClicked: root.expanded = !root.expanded
 
         Kirigami.Icon {

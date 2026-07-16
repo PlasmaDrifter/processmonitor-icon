@@ -10,7 +10,7 @@
         "Description": "Live application list with CPU/Memory usage and the ability to quit apps, directly from the panel.",
         "Icon": "utilities-system-monitor",
         "Id": "local.widget.processmonitor-icon",
-        "Name": "Precossor Utility",
+        "Name": "Processor Utility",
         "Version": "2.0.2"
     },
     "X-Plasma-API-Minimum-Version": "6.0",
