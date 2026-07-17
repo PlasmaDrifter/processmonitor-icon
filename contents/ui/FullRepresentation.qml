@@ -1,63 +1,135 @@
 import QtQuick
-import QtQuick.Layouts
 import QtQuick.Controls as QQC2
+import QtQuick.Layouts
 import QtQuick.Window
-
-import org.kde.plasma.plasmoid
 import org.kde.kirigami as Kirigami
-import org.kde.plasma.components as PlasmaComponents3
-
 import org.kde.ksysguard.process as Process
+import org.kde.plasma.components as PlasmaComponents3
+import org.kde.plasma.plasmoid
 
 Item {
     id: root
 
-    Layout.preferredWidth:  Kirigami.Units.gridUnit * 32
-    Layout.minimumWidth:    Kirigami.Units.gridUnit * 24
-
     // row height mirrors the delegate formula
-    readonly property int rowH:     Kirigami.Units.iconSizes.small
-    + Kirigami.Units.smallSpacing * 4
-    readonly property int headerH:  Math.ceil(Kirigami.Units.gridUnit * 1.8)
-    readonly property int marginsH: Kirigami.Units.largeSpacing * 3  // top + bottom + gap
-
+    readonly property int rowH: Kirigami.Units.iconSizes.small + Kirigami.Units.smallSpacing * 4
+    readonly property int headerH: Math.ceil(Kirigami.Units.gridUnit * 1.8)
+    readonly property int marginsH: Kirigami.Units.largeSpacing * 3 // top + bottom + gap
     // While the model is loading rows is empty; use a tall enough fallback
     // so Plasma never caches a 1-row height.  Once data arrives we snap to
     // the exact count.  minimumHeight == preferredHeight forces Plasma to
     // always respect this value even if it has a stale cached size.
     readonly property int popupHeight: {
         if (rows.length === 0)
-            return Kirigami.Units.gridUnit * 20          // loading fallback
-            return marginsH + headerH + rows.length * rowH   // exact fit
+            return Kirigami.Units.gridUnit * 20;
+ // loading fallback
+        return marginsH + headerH + rows.length * rowH; // exact fit
     }
-
-    Layout.preferredHeight: popupHeight
-    Layout.minimumHeight:   popupHeight
-    Layout.maximumHeight:   popupHeight
-
     readonly property int colName: 0
     readonly property int colIcon: 1
-    readonly property int colCpu:  2
-    readonly property int colMem:  3
-
+    readonly property int colCpu: 2
+    readonly property int colMem: 3
     readonly property int cpuCoreCount: 16
-
     // Adjust these widths to your preference
-    property int nameWidth:  300
-    property int cpuWidth:   80
-    property int memWidth:   100   // back to normal (no debug)
-
+    property int nameWidth: 300
+    property int cpuWidth: 80
+    property int memWidth: 100 // back to normal (no debug)
     readonly property bool isWindowVisible: root.Window.window ? root.Window.window.visible : false
-    property bool firstUpdatePending: false
-    onIsWindowVisibleChanged: {
-        if (isWindowVisible) {
-            firstUpdatePending = true
-        }
+    property string sortColumn: "cpu"
+    property bool sortAscending: false
+    property var rows: []
+
+    function parseMemoryBytes(str) {
+        if (!str)
+            return 0;
+
+        var s = String(str).trim();
+        var match = s.match(/^([\d.]+)\s*([A-Za-z]+)?/);
+        if (!match)
+            return 0;
+
+        var num = parseFloat(match[1]);
+        if (isNaN(num))
+            return 0;
+
+        var unit = (match[2] || "b").toLowerCase();
+        var multiplier = 1;
+        if (unit.indexOf("t") >= 0)
+            multiplier = 1e+12;
+        else if (unit.indexOf("g") >= 0)
+            multiplier = 1e+09;
+        else if (unit.indexOf("m") >= 0)
+            multiplier = 1e+06;
+        else if (unit.indexOf("k") >= 0)
+            multiplier = 1000;
+        return num * multiplier;
     }
 
+    function parseLeadingNumber(str) {
+        if (!str)
+            return 0;
+
+        var cleaned = String(str).replace(/[^0-9.-]/g, '');
+        return parseFloat(cleaned) || 0;
+    }
+
+    function rebuildRows() {
+        var out = [];
+        var n = appModel.rowCount();
+        for (var i = 0; i < n; i++) {
+            var nameIdx = appModel.index(i, root.colName);
+            var iconIdx = appModel.index(i, root.colIcon);
+            var cpuIdx = appModel.index(i, root.colCpu);
+            var memIdx = appModel.index(i, root.colMem);
+            var appName = String(appModel.data(nameIdx, Process.ProcessDataModel.Value) || "");
+            var iconName = String(appModel.data(iconIdx, Process.ProcessDataModel.Value) || "application-x-executable");
+            var cpuRaw = String(appModel.data(cpuIdx, Process.ProcessDataModel.FormattedValue) || "0.0 %");
+            var memFmt = String(appModel.data(memIdx, Process.ProcessDataModel.FormattedValue) || "–");
+            var pids = appModel.data(nameIdx, Process.ProcessDataModel.PIDs) || [];
+            var rawVal = root.parseLeadingNumber(cpuRaw);
+            var scaledVal = rawVal / root.cpuCoreCount;
+            if (isNaN(scaledVal) || !isFinite(scaledVal))
+                scaledVal = 0;
+
+            out.push({
+                "appName": appName,
+                "iconName": iconName,
+                "cpuFmt": scaledVal.toFixed(1) + "%",
+                "cpuRaw": rawVal,
+                "memFmt": memFmt,
+                "memVal": root.parseMemoryBytes(memFmt),
+                "pids": pids
+            });
+        }
+        out.sort(function(a, b) {
+            var res = 0;
+            if (root.sortColumn === "name")
+                res = a.appName.localeCompare(b.appName);
+            else if (root.sortColumn === "cpu")
+                res = a.cpuRaw - b.cpuRaw;
+            else if (root.sortColumn === "mem")
+                res = a.memVal - b.memVal;
+            return root.sortAscending ? res : -res;
+        });
+        root.rows = out;
+    }
+
+    Layout.preferredWidth: Kirigami.Units.gridUnit * 32
+    Layout.minimumWidth: Kirigami.Units.gridUnit * 24
+    Layout.preferredHeight: popupHeight
+    Layout.minimumHeight: popupHeight
+    Layout.maximumHeight: popupHeight
+    onIsWindowVisibleChanged: {
+        if (isWindowVisible)
+            debounceRebuildTimer.restart();
+
+    }
+    onSortColumnChanged: rebuildRows()
+    onSortAscendingChanged: rebuildRows()
+
     Timer {
-        id: firstUpdateTimer
-        interval: 100
+        id: debounceRebuildTimer
+
+        interval: 200
         running: false
         repeat: false
         onTriggered: root.rebuildRows()
@@ -65,43 +137,49 @@ Item {
 
     Process.ApplicationDataModel {
         id: appModel
+
         enabledAttributes: ["appName", "iconName", "usage", "memory"]
         enabled: root.Window.window ? root.Window.window.visible : false
-
         cgroupMapping: {
-            "session.slice":                        "services",
-            "background.slice":                     "services",
-            "org.a11y.atspi.Registry":              "services",
-            "org.kde.discover.notifier":            "services",
-            "geoclue":                              "services",
-            "org.kde.kunifiedpush":                 "services",
-            "dconf.service":                        "services",
-            "flatpak-session-helper.service":       "services",
-            "gpg-agent.service":                    "services",
-            "org.kde.xwaylandvideobridge":          "services",
-            "org.kde.kalendarac":                   "services",
-            "xdg-desktop-portal-gtk.service":       "services",
-            "org.kde.kdeconnect":                   "services",
-            "org.kde.kwalletd6":                    "services",
-            "org.kde.kclockd":                      "services"
+            "session.slice": "services",
+            "background.slice": "services",
+            "org.a11y.atspi.Registry": "services",
+            "org.kde.discover.notifier": "services",
+            "geoclue": "services",
+            "org.kde.kunifiedpush": "services",
+            "dconf.service": "services",
+            "flatpak-session-helper.service": "services",
+            "gpg-agent.service": "services",
+            "org.kde.xwaylandvideobridge": "services",
+            "org.kde.kalendarac": "services",
+            "xdg-desktop-portal-gtk.service": "services",
+            "org.kde.kdeconnect": "services",
+            "org.kde.kwalletd6": "services",
+            "org.kde.kclockd": "services"
         }
         applicationOverrides: {
             "services": {
-                "appName":  i18nc("@label", "Background Services"),
+                "appName": i18nc("@label", "Background Services"),
                 "iconName": "preferences-system-services"
             }
         }
-
         Component.onCompleted: root.rebuildRows()
-        onModelReset:   if (Plasmoid.expanded) root.rebuildRows()
-        onRowsInserted: if (Plasmoid.expanded) root.rebuildRows()
-        onRowsRemoved:  if (Plasmoid.expanded) root.rebuildRows()
-        onDataChanged: {
-            if (root.firstUpdatePending) {
-                root.firstUpdatePending = false
-                firstUpdateTimer.restart()
+        onModelReset: {
+            if (Plasmoid.expanded) {
+                root.rebuildRows();
             }
         }
+        onRowsInserted: {
+            if (Plasmoid.expanded) {
+                root.rebuildRows();
+            }
+        }
+        onRowsRemoved: {
+            if (Plasmoid.expanded) {
+                root.rebuildRows();
+            }
+        }
+        onDataChanged: debounceRebuildTimer.restart()
     }
 
     Timer {
@@ -114,81 +192,8 @@ Item {
 
     Process.ProcessController {
         id: processController
+
         window: root.Window.window
-    }
-
-    property string sortColumn: "cpu"
-    property bool sortAscending: false
-    onSortColumnChanged: rebuildRows()
-    onSortAscendingChanged: rebuildRows()
-
-    property var rows: []
-
-    function parseMemoryBytes(str) {
-        if (!str) return 0
-            var s = String(str).trim()
-            var match = s.match(/^([\d.]+)\s*([A-Za-z]+)?/)
-            if (!match) return 0
-                var num = parseFloat(match[1])
-                if (isNaN(num)) return 0
-                    var unit = (match[2] || "b").toLowerCase()
-                    var multiplier = 1
-                    if (unit.indexOf("t") >= 0) multiplier = 1e12
-                        else if (unit.indexOf("g") >= 0) multiplier = 1e9
-                            else if (unit.indexOf("m") >= 0) multiplier = 1e6
-                                else if (unit.indexOf("k") >= 0) multiplier = 1e3
-                                    return num * multiplier
-    }
-
-    function parseLeadingNumber(str) {
-        if (!str) return 0
-            var cleaned = String(str).replace(/[^0-9.-]/g, '')
-            return parseFloat(cleaned) || 0
-    }
-
-    function rebuildRows() {
-        var out = []
-        var n = appModel.rowCount()
-        for (var i = 0; i < n; i++) {
-            var nameIdx = appModel.index(i, root.colName)
-            var iconIdx = appModel.index(i, root.colIcon)
-            var cpuIdx  = appModel.index(i, root.colCpu)
-            var memIdx  = appModel.index(i, root.colMem)
-
-            var appName  = String(appModel.data(nameIdx, Process.ProcessDataModel.Value) || "")
-            var iconName = String(appModel.data(iconIdx, Process.ProcessDataModel.Value) || "application-x-executable")
-            var cpuRaw   = String(appModel.data(cpuIdx, Process.ProcessDataModel.FormattedValue) || "0.0 %")
-            var memFmt   = String(appModel.data(memIdx, Process.ProcessDataModel.FormattedValue) || "–")
-            var pids     = appModel.data(nameIdx, Process.ProcessDataModel.PIDs) || []
-
-            var rawVal = root.parseLeadingNumber(cpuRaw)
-            var scaledVal = rawVal / root.cpuCoreCount
-            if (isNaN(scaledVal) || !isFinite(scaledVal)) scaledVal = 0
-
-                out.push({
-                    appName:  appName,
-                    iconName: iconName,
-                    cpuFmt:   scaledVal.toFixed(1) + "%",
-                         cpuRaw:   rawVal,
-                         memFmt:   memFmt,
-                         memVal:   root.parseMemoryBytes(memFmt),
-                         pids:     pids
-                })
-        }
-
-        out.sort(function(a, b) {
-            var res = 0
-            if (root.sortColumn === "name") {
-                res = a.appName.localeCompare(b.appName)
-            } else if (root.sortColumn === "cpu") {
-                res = a.cpuRaw - b.cpuRaw
-            } else if (root.sortColumn === "mem") {
-                res = a.memVal - b.memVal
-            }
-            return root.sortAscending ? res : -res
-        })
-
-        root.rows = out
     }
 
     // ---------- UI ----------
@@ -215,12 +220,12 @@ Item {
                 col: "name"
                 alignment: Qt.AlignLeft
                 onSortClicked: {
-                    if (root.sortColumn === "name")
-                        root.sortAscending = !root.sortAscending
-                        else {
-                            root.sortColumn = "name"
-                            root.sortAscending = false
-                        }
+                    if (root.sortColumn === "name") {
+                        root.sortAscending = !root.sortAscending;
+                    } else {
+                        root.sortColumn = "name";
+                        root.sortAscending = false;
+                    }
                 }
             }
 
@@ -230,12 +235,12 @@ Item {
                 col: "cpu"
                 alignment: Qt.AlignRight
                 onSortClicked: {
-                    if (root.sortColumn === "cpu")
-                        root.sortAscending = !root.sortAscending
-                        else {
-                            root.sortColumn = "cpu"
-                            root.sortAscending = false
-                        }
+                    if (root.sortColumn === "cpu") {
+                        root.sortAscending = !root.sortAscending;
+                    } else {
+                        root.sortColumn = "cpu";
+                        root.sortAscending = false;
+                    }
                 }
             }
 
@@ -245,12 +250,12 @@ Item {
                 col: "mem"
                 alignment: Qt.AlignRight
                 onSortClicked: {
-                    if (root.sortColumn === "mem")
-                        root.sortAscending = !root.sortAscending
-                        else {
-                            root.sortColumn = "mem"
-                            root.sortAscending = false
-                        }
+                    if (root.sortColumn === "mem") {
+                        root.sortAscending = !root.sortAscending;
+                    } else {
+                        root.sortColumn = "mem";
+                        root.sortAscending = false;
+                    }
                 }
             }
 
@@ -258,6 +263,7 @@ Item {
                 Layout.preferredWidth: Kirigami.Units.iconSizes.small
                 Layout.preferredHeight: Kirigami.Units.iconSizes.small
             }
+
         }
 
         RowLayout {
@@ -267,17 +273,26 @@ Item {
 
             ListView {
                 id: listView
+
                 Layout.fillWidth: true
                 Layout.fillHeight: true
                 clip: true
                 model: root.rows
                 spacing: 0
 
+                Kirigami.PlaceholderMessage {
+                    anchors.centerIn: parent
+                    width: parent.width - Kirigami.Units.gridUnit * 4
+                    visible: root.rows.length === 0
+                    icon.name: "application-x-executable"
+                    text: i18n("No running applications found")
+                }
+
                 delegate: Item {
                     id: delegateRoot
+
                     width: listView.width
-                    height: Math.max(Kirigami.Units.iconSizes.small + Kirigami.Units.smallSpacing * 4,
-                                     row.implicitHeight)
+                    height: Math.max(Kirigami.Units.iconSizes.small + Kirigami.Units.smallSpacing * 4, row.implicitHeight)
 
                     HoverHandler {
                         id: delegateHover
@@ -288,13 +303,21 @@ Item {
                         anchors.leftMargin: 2
                         anchors.rightMargin: 2
                         color: Kirigami.Theme.highlightColor
-                        opacity: delegateHover.hovered ? 0.08 : 0.0
+                        opacity: delegateHover.hovered ? 0.08 : 0
                         radius: 4
-                        Behavior on opacity { NumberAnimation { duration: 100 } }
+
+                        Behavior on opacity {
+                            NumberAnimation {
+                                duration: 100
+                            }
+
+                        }
+
                     }
 
                     RowLayout {
                         id: row
+
                         anchors.fill: parent
                         anchors.leftMargin: Kirigami.Units.smallSpacing * 2
                         anchors.rightMargin: Kirigami.Units.smallSpacing * 2
@@ -317,14 +340,18 @@ Item {
                             Layout.preferredWidth: root.cpuWidth
                             text: modelData.cpuFmt
                             horizontalAlignment: Text.AlignRight
-                            font.features: { "tnum": 1 }
+                            font.features: {
+                                "tnum": 1
+                            }
                         }
 
                         QQC2.Label {
                             Layout.preferredWidth: root.memWidth
                             text: modelData.memFmt
                             horizontalAlignment: Text.AlignRight
-                            font.features: { "tnum": 1 }
+                            font.features: {
+                                "tnum": 1
+                            }
                         }
 
                         QQC2.ToolButton {
@@ -339,14 +366,14 @@ Item {
                             QQC2.ToolTip.text: i18n("Kill process")
                             QQC2.ToolTip.visible: hovered
                             QQC2.ToolTip.delay: Kirigami.Units.toolTipDelay
-
                             onClicked: {
                                 if (modelData.pids && modelData.pids.length > 0) {
-                                    killDialog.pids = modelData.pids
-                                    killDialog.open()
+                                    killDialog.pids = modelData.pids;
+                                    killDialog.open();
                                 }
                             }
                         }
+
                     }
 
                     Rectangle {
@@ -357,19 +384,14 @@ Item {
                         color: Kirigami.Theme.textColor
                         opacity: 0.15
                     }
+
                 }
 
-                Kirigami.PlaceholderMessage {
-                    anchors.centerIn: parent
-                    width: parent.width - Kirigami.Units.gridUnit * 4
-                    visible: root.rows.length === 0
-                    icon.name: "application-x-executable"
-                    text: i18n("No running applications found")
-                }
             }
 
             QQC2.ScrollBar {
                 id: vertScrollBar
+
                 Layout.fillHeight: true
                 orientation: Qt.Vertical
                 size: listView.visibleArea.heightRatio
@@ -377,22 +399,28 @@ Item {
                 active: listView.moving || vertScrollBar.hovered || vertScrollBar.pressed
                 policy: QQC2.ScrollBar.AsNeeded
                 onPositionChanged: {
-                    if (active) listView.contentY = position * listView.contentHeight
+                    if (active)
+                        listView.contentY = position * listView.contentHeight;
+
                 }
             }
+
         }
+
     }
 
     Kirigami.PromptDialog {
         id: killDialog
+
         property var pids: []
+
         title: i18n("Kill Process?")
         subtitle: i18n("Are you sure you want to terminate this process?")
         standardButtons: Kirigami.Dialog.Ok | Kirigami.Dialog.Cancel
         onAccepted: {
-            if (pids && pids.length > 0) {
-                processController.sendSignal(pids, 9)
-            }
+            if (pids && pids.length > 0)
+                processController.sendSignal(pids, 9);
+
         }
     }
 
@@ -400,16 +428,24 @@ Item {
         property string label: ""
         property string col: ""
         property int alignment: Qt.AlignLeft
-        signal sortClicked
+
+        signal sortClicked()
 
         implicitHeight: Kirigami.Units.gridUnit * 1.8
 
         Rectangle {
             anchors.fill: parent
             color: Kirigami.Theme.highlightColor
-            opacity: mouseArea.containsMouse ? 0.12 : 0.0
+            opacity: mouseArea.containsMouse ? 0.12 : 0
             radius: 4
-            Behavior on opacity { NumberAnimation { duration: 150 } }
+
+            Behavior on opacity {
+                NumberAnimation {
+                    duration: 150
+                }
+
+            }
+
         }
 
         RowLayout {
@@ -427,22 +463,25 @@ Item {
                 font.bold: true
                 font.pointSize: Kirigami.Theme.defaultFont.pointSize * 0.95
             }
+
             QQC2.Label {
-                text: (root.sortColumn === col)
-                ? (root.sortAscending ? "▲" : "▼")
-                : ""
+                text: (root.sortColumn === col) ? (root.sortAscending ? "▲" : "▼") : ""
                 color: (root.sortColumn === col) ? Kirigami.Theme.highlightColor : Kirigami.Theme.textColor
                 font.pointSize: Kirigami.Theme.defaultFont.pointSize * 0.8
                 visible: root.sortColumn === col
             }
+
         }
 
         MouseArea {
             id: mouseArea
+
             anchors.fill: parent
             hoverEnabled: true
             cursorShape: Qt.PointingHandCursor
             onClicked: sortClicked()
         }
+
     }
+
 }
