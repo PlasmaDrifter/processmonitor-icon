@@ -5,6 +5,7 @@ import QtQuick.Window
 import org.kde.kirigami as Kirigami
 import org.kde.ksysguard.process as Process
 import org.kde.plasma.components as PlasmaComponents3
+import org.kde.plasma.plasma5support as Plasma5Support
 import org.kde.plasma.plasmoid
 
 Item {
@@ -21,11 +22,11 @@ Item {
     // the exact count.  minimumHeight == preferredHeight forces Plasma to
     // always respect this value even if it has a stale cached size.
     readonly property int popupHeight: {
-        if (rows.length === 0)
-            return Kirigami.Units.gridUnit * 20;
+        var baseH = rows.length === 0 ? Kirigami.Units.gridUnit * 20 : (marginsH + headerH + rows.length * rowH);
+        if (root.uptimeDisplayMode === 2 && root.systemUptimeStr !== "")
+            baseH += Kirigami.Units.gridUnit * 1.5;
 
-        // loading fallback
-        return marginsH + headerH + rows.length * rowH;
+        return baseH;
     }
     readonly property int colName: 0
     readonly property int colIcon: 1
@@ -41,6 +42,11 @@ Item {
     property bool sortAscending: false
     property var rows: []
     property bool firstUpdatePending: false
+    property string systemUptimeStr: ""
+    readonly property int uptimeDisplayMode: {
+        var val = Plasmoid.configuration.systemUptimeDisplay;
+        return (val === undefined) ? 2 : val;
+    }
 
     function parseMemoryBytes(str) {
         if (!str)
@@ -76,7 +82,31 @@ Item {
         return parseFloat(cleaned) || 0;
     }
 
+    function formatUptime(seconds) {
+        var s = Math.floor(seconds);
+        if (s < 60)
+            return s + "s";
+
+        var m = Math.floor(s / 60);
+        s = s % 60;
+        if (m < 60)
+            return m + "m " + s + "s";
+
+        var h = Math.floor(m / 60);
+        m = m % 60;
+        if (h < 24)
+            return h + "h " + m + "m";
+
+        var d = Math.floor(h / 24);
+        h = h % 24;
+        return d + "d " + h + "h";
+    }
+
     function rebuildRows() {
+        if (root.uptimeDisplayMode !== 0)
+            uptimeSource.fetchUptime();
+        else
+            root.systemUptimeStr = "";
         var out = [];
         var n = appModel.rowCount();
         for (var i = 0; i < n; i++) {
@@ -206,6 +236,25 @@ Item {
         window: root.Window.window
     }
 
+    Plasma5Support.DataSource {
+        id: uptimeSource
+
+        function fetchUptime() {
+            connectSource("cat /proc/uptime");
+        }
+
+        engine: "executable"
+        connectedSources: []
+        onNewData: function(source, data) {
+            disconnectSource(source);
+            var stdout = data["stdout"] || "";
+            var uptimeSec = parseFloat(stdout.trim().split(" ")[0]) || 0;
+            if (uptimeSec > 0)
+                root.systemUptimeStr = root.formatUptime(uptimeSec);
+
+        }
+    }
+
     // ---------- UI ----------
     ColumnLayout {
         anchors.fill: parent
@@ -225,10 +274,13 @@ Item {
             }
 
             SortHeader {
+                id: nameHeader
+
                 Layout.fillWidth: true
                 label: i18n("Name")
                 col: "name"
                 alignment: Qt.AlignLeft
+                extraText: (root.uptimeDisplayMode === 1 && root.systemUptimeStr !== "") ? i18n("Uptime: %1", root.systemUptimeStr) : ""
                 onSortClicked: {
                     if (root.sortColumn === "name") {
                         root.sortAscending = !root.sortAscending;
@@ -417,6 +469,23 @@ Item {
 
         }
 
+        RowLayout {
+            Layout.fillWidth: true
+            visible: root.uptimeDisplayMode === 2 && root.systemUptimeStr !== ""
+            spacing: Kirigami.Units.smallSpacing
+
+            QQC2.Label {
+                Layout.fillWidth: true
+                horizontalAlignment: Text.AlignHCenter
+                text: i18n("System Uptime: %1", root.systemUptimeStr)
+                font.pointSize: Kirigami.Theme.defaultFont.pointSize * 0.9
+                font.italic: true
+                color: Kirigami.Theme.textColor
+                opacity: 0.8
+            }
+
+        }
+
     }
 
     Kirigami.PromptDialog {
@@ -438,6 +507,7 @@ Item {
         property string label: ""
         property string col: ""
         property int alignment: Qt.AlignLeft
+        property string extraText: ""
 
         signal sortClicked()
 
@@ -459,26 +529,50 @@ Item {
         }
 
         RowLayout {
-            anchors.left: alignment === Qt.AlignLeft ? parent.left : undefined
-            anchors.right: alignment === Qt.AlignRight ? parent.right : undefined
-            anchors.horizontalCenter: (alignment !== Qt.AlignLeft && alignment !== Qt.AlignRight) ? parent.horizontalCenter : undefined
+            anchors.left: parent.left
+            anchors.right: parent.right
             anchors.verticalCenter: parent.verticalCenter
             anchors.leftMargin: alignment === Qt.AlignLeft ? Kirigami.Units.smallSpacing * 2 : 0
             anchors.rightMargin: alignment === Qt.AlignRight ? Kirigami.Units.smallSpacing * 2 : 0
             spacing: Kirigami.Units.smallSpacing
 
-            QQC2.Label {
-                text: label
-                color: mouseArea.containsMouse ? Kirigami.Theme.highlightColor : Kirigami.Theme.textColor
-                font.bold: true
-                font.pointSize: Kirigami.Theme.defaultFont.pointSize * 0.95
+            Item {
+                Layout.fillWidth: true
+                visible: alignment === Qt.AlignRight
+            }
+
+            RowLayout {
+                spacing: Kirigami.Units.smallSpacing
+                Layout.alignment: alignment
+
+                QQC2.Label {
+                    text: label
+                    color: mouseArea.containsMouse ? Kirigami.Theme.highlightColor : Kirigami.Theme.textColor
+                    font.bold: true
+                    font.pointSize: Kirigami.Theme.defaultFont.pointSize * 0.95
+                }
+
+                QQC2.Label {
+                    text: (root.sortColumn === col) ? (root.sortAscending ? "▲" : "▼") : ""
+                    color: (root.sortColumn === col) ? Kirigami.Theme.highlightColor : Kirigami.Theme.textColor
+                    font.pointSize: Kirigami.Theme.defaultFont.pointSize * 0.8
+                    visible: root.sortColumn === col
+                }
+
+            }
+
+            Item {
+                Layout.fillWidth: true
+                visible: alignment === Qt.AlignLeft && extraText !== ""
             }
 
             QQC2.Label {
-                text: (root.sortColumn === col) ? (root.sortAscending ? "▲" : "▼") : ""
-                color: (root.sortColumn === col) ? Kirigami.Theme.highlightColor : Kirigami.Theme.textColor
-                font.pointSize: Kirigami.Theme.defaultFont.pointSize * 0.8
-                visible: root.sortColumn === col
+                text: extraText
+                visible: extraText !== ""
+                font.pointSize: Kirigami.Theme.defaultFont.pointSize * 0.85
+                font.italic: true
+                color: Kirigami.Theme.textColor
+                opacity: 0.8
             }
 
         }

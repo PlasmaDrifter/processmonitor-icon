@@ -21,5 +21,9 @@
             <label>Refresh interval in seconds</label>
             <default>3</default>
         </entry>
+        <entry name="systemUptimeDisplay" type="Int">
+            <label>Where to display system uptime (0=Disabled, 1=Header, 2=Footer)</label>
+            <default>2</default>
+        </entry>
     </group>
 </kcfg>
