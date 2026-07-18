@@ -8,6 +8,8 @@ import org.kde.plasma.components as PlasmaComponents3
 import org.kde.plasma.plasmoid
 
 Item {
+    // exact fit
+
     id: root
 
     // row height mirrors the delegate formula
@@ -21,8 +23,9 @@ Item {
     readonly property int popupHeight: {
         if (rows.length === 0)
             return Kirigami.Units.gridUnit * 20;
- // loading fallback
-        return marginsH + headerH + rows.length * rowH; // exact fit
+
+        // loading fallback
+        return marginsH + headerH + rows.length * rowH;
     }
     readonly property int colName: 0
     readonly property int colIcon: 1
@@ -37,6 +40,7 @@ Item {
     property string sortColumn: "cpu"
     property bool sortAscending: false
     property var rows: []
+    property bool firstUpdatePending: false
 
     function parseMemoryBytes(str) {
         if (!str)
@@ -119,17 +123,18 @@ Item {
     Layout.minimumHeight: popupHeight
     Layout.maximumHeight: popupHeight
     onIsWindowVisibleChanged: {
-        if (isWindowVisible)
-            debounceRebuildTimer.restart();
-
+        if (isWindowVisible) {
+            firstUpdatePending = true;
+            firstUpdateTimer.restart();
+        }
     }
     onSortColumnChanged: rebuildRows()
     onSortAscendingChanged: rebuildRows()
 
     Timer {
-        id: debounceRebuildTimer
+        id: firstUpdateTimer
 
-        interval: 200
+        interval: 150
         running: false
         repeat: false
         onTriggered: root.rebuildRows()
@@ -165,28 +170,33 @@ Item {
         }
         Component.onCompleted: root.rebuildRows()
         onModelReset: {
-            if (Plasmoid.expanded) {
+            if (Plasmoid.expanded)
                 root.rebuildRows();
-            }
+
         }
         onRowsInserted: {
-            if (Plasmoid.expanded) {
+            if (Plasmoid.expanded)
                 root.rebuildRows();
-            }
+
         }
         onRowsRemoved: {
-            if (Plasmoid.expanded) {
+            if (Plasmoid.expanded)
                 root.rebuildRows();
+
+        }
+        onDataChanged: {
+            if (root.firstUpdatePending) {
+                root.firstUpdatePending = false;
+                firstUpdateTimer.restart();
             }
         }
-        onDataChanged: debounceRebuildTimer.restart()
     }
 
     Timer {
-        interval: Math.max(1500, Plasmoid.configuration.refreshInterval * 1000)
+        interval: Math.max(1000, Plasmoid.configuration.refreshInterval * 1000)
         running: root.Window.window ? root.Window.window.visible : false
         repeat: true
-        triggeredOnStart: true
+        triggeredOnStart: false
         onTriggered: root.rebuildRows()
     }
 
