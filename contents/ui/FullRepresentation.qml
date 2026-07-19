@@ -22,7 +22,11 @@ Item {
     // the exact count.  minimumHeight == preferredHeight forces Plasma to
     // always respect this value even if it has a stale cached size.
     readonly property int popupHeight: {
-        var baseH = rows.length === 0 ? Kirigami.Units.gridUnit * 20 : (marginsH + headerH + rows.length * rowH);
+        if (rows.length === 0)
+            return Kirigami.Units.gridUnit * 20;
+
+        // loading fallback
+        var baseH = marginsH + headerH + rows.length * rowH;
         if (root.uptimeDisplayMode === 2 && root.systemUptimeStr !== "")
             baseH += Kirigami.Units.gridUnit * 1.5;
 
@@ -201,17 +205,17 @@ Item {
         Component.onCompleted: root.rebuildRows()
         onModelReset: {
             if (Plasmoid.expanded)
-                root.rebuildRows();
+                debounceTimer.restart();
 
         }
         onRowsInserted: {
             if (Plasmoid.expanded)
-                root.rebuildRows();
+                debounceTimer.restart();
 
         }
         onRowsRemoved: {
             if (Plasmoid.expanded)
-                root.rebuildRows();
+                debounceTimer.restart();
 
         }
         onDataChanged: {
@@ -219,7 +223,19 @@ Item {
                 root.firstUpdatePending = false;
                 firstUpdateTimer.restart();
             }
+            if (Plasmoid.expanded)
+                debounceTimer.restart();
+
         }
+    }
+
+    Timer {
+        id: debounceTimer
+
+        interval: 200
+        running: false
+        repeat: false
+        onTriggered: root.rebuildRows()
     }
 
     Timer {
