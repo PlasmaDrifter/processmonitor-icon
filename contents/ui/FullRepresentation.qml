@@ -204,28 +204,20 @@ Item {
         }
         Component.onCompleted: root.rebuildRows()
         onModelReset: {
-            if (Plasmoid.expanded)
-                debounceTimer.restart();
-
+            debounceTimer.restart();
         }
         onRowsInserted: {
-            if (Plasmoid.expanded)
-                debounceTimer.restart();
-
+            debounceTimer.restart();
         }
         onRowsRemoved: {
-            if (Plasmoid.expanded)
-                debounceTimer.restart();
-
+            debounceTimer.restart();
         }
         onDataChanged: {
             if (root.firstUpdatePending) {
                 root.firstUpdatePending = false;
                 firstUpdateTimer.restart();
             }
-            if (Plasmoid.expanded)
-                debounceTimer.restart();
-
+            debounceTimer.restart();
         }
     }
 
