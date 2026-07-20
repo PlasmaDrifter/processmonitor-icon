@@ -25,7 +25,6 @@ Item {
         if (rows.length === 0)
             return Kirigami.Units.gridUnit * 20;
 
-        // loading fallback
         var baseH = marginsH + headerH + rows.length * rowH;
         if (root.uptimeDisplayMode === 2 && root.systemUptimeStr !== "")
             baseH += Kirigami.Units.gridUnit * 1.5;
@@ -200,9 +199,9 @@ Item {
         root.rebuildRows();
     }
 
-    implicitWidth: Layout.preferredWidth
-    implicitHeight: Layout.preferredHeight
-    Layout.preferredWidth: Kirigami.Units.gridUnit * 32
+    implicitWidth: Kirigami.Units.gridUnit * 32
+    implicitHeight: popupHeight
+    Layout.preferredWidth: implicitWidth
     Layout.minimumWidth: Kirigami.Units.gridUnit * 24
     Layout.preferredHeight: popupHeight
     Layout.minimumHeight: popupHeight
@@ -233,7 +232,7 @@ Item {
         id: appModel
 
         enabledAttributes: ["appName", "iconName", "usage", "memory"]
-        enabled: root.Window.window ? root.Window.window.visible : false
+        enabled: true
         cgroupMapping: {
             "session.slice": "services",
             "background.slice": "services",
@@ -353,6 +352,8 @@ Item {
 
     // ---------- UI ----------
     ColumnLayout {
+        id: mainLayout
+
         anchors.fill: parent
         anchors.margins: Kirigami.Units.largeSpacing
         spacing: Kirigami.Units.largeSpacing
@@ -566,11 +567,15 @@ Item {
         }
 
         RowLayout {
+            id: uptimeRow
+
             Layout.fillWidth: true
             visible: root.uptimeDisplayMode === 2 && root.systemUptimeStr !== ""
             spacing: Kirigami.Units.smallSpacing
 
             QQC2.Label {
+                id: uptimeLabel
+
                 Layout.fillWidth: true
                 horizontalAlignment: Text.AlignHCenter
                 text: i18n("System Uptime: %1", root.systemUptimeStr)
