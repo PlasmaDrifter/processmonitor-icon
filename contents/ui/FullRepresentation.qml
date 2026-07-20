@@ -30,7 +30,7 @@ Item {
         if (root.uptimeDisplayMode === 2 && root.systemUptimeStr !== "")
             baseH += Kirigami.Units.gridUnit * 1.5;
 
-        return baseH;
+        return Math.min(baseH, Kirigami.Units.gridUnit * 25);
     }
     readonly property int colName: 0
     readonly property int colIcon: 1
