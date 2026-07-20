@@ -30,7 +30,7 @@ Item {
         if (root.uptimeDisplayMode === 2 && root.systemUptimeStr !== "")
             baseH += Kirigami.Units.gridUnit * 1.5;
 
-        return Math.min(baseH, Kirigami.Units.gridUnit * 25);
+        return baseH;
     }
     readonly property int colName: 0
     readonly property int colIcon: 1
@@ -108,10 +108,9 @@ Item {
     }
 
     function rebuildRows() {
-        if (root.uptimeDisplayMode !== 0)
-            uptimeSource.fetchUptime();
-        else
+        if (root.uptimeDisplayMode === 0)
             root.systemUptimeStr = "";
+
         var out = [];
         var n = appModel.rowCount();
         for (var i = 0; i < n; i++) {
@@ -201,6 +200,8 @@ Item {
         root.rebuildRows();
     }
 
+    implicitWidth: Layout.preferredWidth
+    implicitHeight: Layout.preferredHeight
     Layout.preferredWidth: Kirigami.Units.gridUnit * 32
     Layout.minimumWidth: Kirigami.Units.gridUnit * 24
     Layout.preferredHeight: popupHeight
@@ -210,6 +211,9 @@ Item {
         if (isWindowVisible) {
             firstUpdatePending = true;
             firstUpdateTimer.restart();
+            if (root.uptimeDisplayMode !== 0)
+                uptimeSource.fetchUptime();
+
             vmSource.fetchVMs();
         }
     }
@@ -282,10 +286,24 @@ Item {
     }
 
     Timer {
-        interval: Math.max(1000, Plasmoid.configuration.refreshInterval * 1000)
+        id: uptimeTimer
+
+        interval: 600000 // 10 minutes
         running: root.Window.window ? root.Window.window.visible : false
         repeat: true
         triggeredOnStart: false
+        onTriggered: {
+            if (root.uptimeDisplayMode !== 0)
+                uptimeSource.fetchUptime();
+
+        }
+    }
+
+    Timer {
+        interval: Math.max(1000, Plasmoid.configuration.refreshInterval * 1000)
+        running: root.Window.window ? root.Window.window.visible : false
+        repeat: true
+        triggeredOnStart: true
         onTriggered: {
             vmSource.fetchVMs();
             root.rebuildRows();
