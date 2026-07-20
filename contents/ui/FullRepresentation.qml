@@ -271,7 +271,6 @@ Item {
                 root.firstUpdatePending = false;
                 firstUpdateTimer.restart();
             }
-            debounceTimer.restart();
         }
     }
 
