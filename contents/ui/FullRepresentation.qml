@@ -45,6 +45,7 @@ Item {
     property string sortColumn: "cpu"
     property bool sortAscending: false
     property var rows: []
+    property var vmRows: []
     property bool firstUpdatePending: false
     property string systemUptimeStr: ""
     readonly property int uptimeDisplayMode: {
@@ -138,6 +139,9 @@ Item {
                 "pids": pids
             });
         }
+        for (var j = 0; j < root.vmRows.length; j++) {
+            out.push(root.vmRows[j]);
+        }
         out.sort(function(a, b) {
             var res = 0;
             if (root.sortColumn === "name")
@@ -151,6 +155,52 @@ Item {
         root.rows = out;
     }
 
+    function parseVMs(stdout) {
+        var lines = stdout.trim().split("\n");
+        var temp = [];
+        for (var i = 0; i < lines.length; i++) {
+            var line = lines[i].trim();
+            if (!line)
+                continue;
+
+            var parts = line.split(/\s+/);
+            if (parts.length < 4)
+                continue;
+
+            var pid = parseInt(parts[0]);
+            var cpuRaw = parseFloat(parts[1]);
+            var rssKb = parseFloat(parts[2]);
+            var cmd = parts.slice(3).join(" ");
+            var vmName = "QEMU VM";
+            var match = cmd.match(/guest=([^,]+)/);
+            if (match) {
+                vmName = match[1];
+            } else {
+                match = cmd.match(/-name\s+([^\s,]+)/);
+                if (match)
+                    vmName = match[1];
+
+            }
+            var scaledCpu = cpuRaw / root.cpuCoreCount;
+            if (isNaN(scaledCpu) || !isFinite(scaledCpu))
+                scaledCpu = 0;
+
+            var memGb = rssKb / (1024 * 1024);
+            var memFmt = memGb >= 1 ? memGb.toFixed(1) + " GiB" : (rssKb / 1024).toFixed(0) + " MiB";
+            temp.push({
+                "appName": vmName + " (VM)",
+                "iconName": "virt-manager",
+                "cpuFmt": scaledCpu.toFixed(1) + "%",
+                "cpuRaw": cpuRaw,
+                "memFmt": memFmt,
+                "memVal": rssKb * 1024,
+                "pids": [pid]
+            });
+        }
+        root.vmRows = temp;
+        root.rebuildRows();
+    }
+
     Layout.preferredWidth: Kirigami.Units.gridUnit * 32
     Layout.minimumWidth: Kirigami.Units.gridUnit * 24
     Layout.preferredHeight: popupHeight
@@ -160,6 +210,7 @@ Item {
         if (isWindowVisible) {
             firstUpdatePending = true;
             firstUpdateTimer.restart();
+            vmSource.fetchVMs();
         }
     }
     onSortColumnChanged: rebuildRows()
@@ -235,7 +286,10 @@ Item {
         running: root.Window.window ? root.Window.window.visible : false
         repeat: true
         triggeredOnStart: false
-        onTriggered: root.rebuildRows()
+        onTriggered: {
+            vmSource.fetchVMs();
+            root.rebuildRows();
+        }
     }
 
     Process.ProcessController {
@@ -260,6 +314,22 @@ Item {
             if (uptimeSec > 0)
                 root.systemUptimeStr = root.formatUptime(uptimeSec);
 
+        }
+    }
+
+    Plasma5Support.DataSource {
+        id: vmSource
+
+        function fetchVMs() {
+            connectSource("ps -C qemu-system-x86_64 -o pid,%cpu,rss,cmd --no-headers 2>/dev/null || true");
+        }
+
+        engine: "executable"
+        connectedSources: []
+        onNewData: function(source, data) {
+            disconnectSource(source);
+            var stdout = data["stdout"] || "";
+            root.parseVMs(stdout);
         }
     }
 
