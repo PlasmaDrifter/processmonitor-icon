@@ -1,42 +1,50 @@
-# Processor Utility
+# Process Monitor Widget
 
-A KDE Plasma panel widget that shows a live list of running applications sorted by CPU or memory usage, with the ability to kill any process directly from the panel.
+[![KDE Plasma 6](https://img.shields.io/badge/KDE_Plasma-6.0+-3152A0?style=for-the-badge&logo=kde&logoColor=white)](https://kde.org/plasma-desktop/)
+[![QML](https://img.shields.io/badge/UI-QML%2FQt6-41CD52?style=for-the-badge&logo=qt&logoColor=white)](https://doc.qt.io/qt-6/qtqml-index.html)
+[![Category](https://img.shields.io/badge/Process%20Monitor-AF52DE?style=for-the-badge&logo=linux&logoColor=white)](https://github.com/PlasmaDrifter)
+[![License](https://img.shields.io/badge/License-GPLv2-blue.svg?style=for-the-badge)](LICENSE)
 
-![processormonitor](processor.png)
-![processormonitor](desktop-2.png)
+A lightweight system activity indicator and top process resource monitor for KDE Plasma 6.
+
+---
+
+## Previews
+
+![Process Monitor Widget Preview](desktop-2.png)
+
+![Process Monitor Widget Preview](processor.png)
+
+---
 
 ## Features
 
-- Live application list grouped by app (not individual PIDs)
-- Sortable columns: Name, CPU %, Memory
-- Kill button per row — confirms before sending SIGKILL
-- Popup height auto-sizes to the number of open apps
-- Configurable panel icon (choose any icon from your theme)
-- Optional icon colour tinting
-- Configurable refresh interval
+- **Top**: CPU and Memory consuming process tracking
+- **Quick**: status indicator with dynamic color thresholds
+- **System**: monitor launch shortcut integration
+- **Low**: resource overhead
 
 ## Requirements
 
-- KDE Plasma 6.0+
-- `org.kde.ksysguard.process` (included with Plasma / KSysGuard)
+- **Environment**: KDE Plasma 6.0 or higher
+- **Framework**: Qt6 QML / Plasma Applet API
 
 ## Installation
 
+### Option 1: Git Clone (Recommended)
 ```bash
-cd ~/.local/share/plasma/plasmoids/
-git clone https://github.com/PlasmaDrifter/processmonitor-icon local.widget.processmonitor-icon
+mkdir -p ~/.local/share/plasma/plasmoids/
+git clone https://github.com/PlasmaDrifter/processmonitor-icon.git ~/.local/share/plasma/plasmoids/local.widget.processmonitor-icon
 ```
 
-Then right-click your panel → **Add Widgets** → search for **Processor Utility**.
+### Option 2: Plasma Package Installer
+```bash
+kpackagetool6 -i ~/.local/share/plasma/plasmoids/local.widget.processmonitor-icon
+```
 
-## Configuration
+Then right-click your desktop or panel $\rightarrow$ **Add Widgets...** and search for the widget name.
 
-Right-click the widget → **Configure…**
+## Credits & License
 
-| Option | Description |
-|--------|-------------|
-| Panel icon | Choose any icon from the system icon theme |
-| Colourize icon | Tint the panel icon with a custom colour |
-| Icon colour | The tint colour (only active when colourize is on) |
-| Refresh interval | How often to refresh the process list (seconds) |
-
+- **Author / Maintainer**: PlasmaDrifter
+- **License**: Licensed under the [GPLv2](LICENSE).
