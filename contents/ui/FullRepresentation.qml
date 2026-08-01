@@ -26,7 +26,7 @@ Item {
             return Kirigami.Units.gridUnit * 20;
 
         var baseH = marginsH + headerH + rows.length * rowH;
-        if (root.uptimeDisplayMode === 2 && root.systemUptimeStr !== "")
+        if ((root.uptimeDisplayMode !== 0 && root.systemUptimeStr !== "") || root.cpuTempStr !== "" || root.gpuTempStr !== "")
             baseH += Kirigami.Units.gridUnit * 1.5;
 
         return baseH;
@@ -47,6 +47,8 @@ Item {
     property var vmRows: []
     property bool firstUpdatePending: false
     property string systemUptimeStr: ""
+    property string cpuTempStr: ""
+    property string gpuTempStr: ""
     readonly property int uptimeDisplayMode: {
         var val = Plasmoid.configuration.systemUptimeDisplay;
         return (val === undefined) ? 2 : val;
@@ -199,6 +201,25 @@ Item {
         root.rebuildRows();
     }
 
+    function parseTemps(stdout) {
+        var parts = stdout.trim().split(/\s+/);
+        if (parts.length >= 2) {
+            var cpuRaw = parseFloat(parts[0]);
+            var gpuRaw = parseFloat(parts[1]);
+            if (!isNaN(cpuRaw) && cpuRaw > 0)
+                root.cpuTempStr = (cpuRaw / 1000).toFixed(0) + "°C";
+            else
+                root.cpuTempStr = "";
+            if (!isNaN(gpuRaw) && gpuRaw > 0)
+                root.gpuTempStr = (gpuRaw / 1000).toFixed(0) + "°C";
+            else
+                root.gpuTempStr = "";
+        } else {
+            root.cpuTempStr = "";
+            root.gpuTempStr = "";
+        }
+    }
+
     implicitWidth: Kirigami.Units.gridUnit * 32
     implicitHeight: popupHeight
     Layout.preferredWidth: implicitWidth
@@ -214,6 +235,7 @@ Item {
                 uptimeSource.fetchUptime();
 
             vmSource.fetchVMs();
+            tempSource.fetchTemps();
         }
     }
     onSortColumnChanged: rebuildRows()
@@ -304,6 +326,7 @@ Item {
         triggeredOnStart: true
         onTriggered: {
             vmSource.fetchVMs();
+            tempSource.fetchTemps();
             root.rebuildRows();
         }
     }
@@ -349,6 +372,22 @@ Item {
         }
     }
 
+    Plasma5Support.DataSource {
+        id: tempSource
+
+        function fetchTemps() {
+            connectSource("cpu_temp=\"\"; gpu_temp=\"\"; for d in /sys/class/hwmon/hwmon*; do name=$(cat $d/name 2>/dev/null); if [ \"$name\" = \"k10temp\" ] || [ \"$name\" = \"coretemp\" ]; then cpu_temp=$(cat $d/temp1_input 2>/dev/null); elif [ \"$name\" = \"amdgpu\" ]; then gpu_temp=$(cat $d/temp1_input 2>/dev/null); fi; done; echo \"$cpu_temp $gpu_temp\"");
+        }
+
+        engine: "executable"
+        connectedSources: []
+        onNewData: function(source, data) {
+            disconnectSource(source);
+            var stdout = data["stdout"] || "";
+            root.parseTemps(stdout);
+        }
+    }
+
     // ---------- UI ----------
     ColumnLayout {
         id: mainLayout
@@ -356,6 +395,51 @@ Item {
         anchors.fill: parent
         anchors.margins: Kirigami.Units.largeSpacing
         spacing: Kirigami.Units.largeSpacing
+
+        RowLayout {
+            id: topInfoRow
+
+            Layout.fillWidth: true
+            visible: (root.uptimeDisplayMode !== 0 && root.systemUptimeStr !== "") || root.cpuTempStr !== "" || root.gpuTempStr !== ""
+            Layout.leftMargin: Kirigami.Units.smallSpacing + Kirigami.Units.iconSizes.small + Kirigami.Units.smallSpacing
+            Layout.rightMargin: Kirigami.Units.smallSpacing
+
+            QQC2.Label {
+                id: uptimeLabel
+
+                visible: root.uptimeDisplayMode !== 0 && root.systemUptimeStr !== ""
+                text: i18n("Uptime: %1", root.systemUptimeStr)
+                font.pointSize: Kirigami.Theme.defaultFont.pointSize * 0.9
+                font.italic: true
+                color: Kirigami.Theme.textColor
+                opacity: 0.8
+            }
+
+            Item {
+                Layout.fillWidth: true
+            }
+
+            QQC2.Label {
+                id: tempsLabel
+
+                visible: root.cpuTempStr !== "" || root.gpuTempStr !== ""
+                text: {
+                    var items = [];
+                    if (root.cpuTempStr !== "")
+                        items.push("CPU: " + root.cpuTempStr);
+
+                    if (root.gpuTempStr !== "")
+                        items.push("GPU: " + root.gpuTempStr);
+
+                    return items.join("   ");
+                }
+                font.pointSize: Kirigami.Theme.defaultFont.pointSize * 0.9
+                font.italic: true
+                color: Kirigami.Theme.textColor
+                opacity: 0.8
+            }
+
+        }
 
         RowLayout {
             spacing: Kirigami.Units.smallSpacing
@@ -376,7 +460,7 @@ Item {
                 label: i18n("Name")
                 col: "name"
                 alignment: Qt.AlignLeft
-                extraText: (root.uptimeDisplayMode === 1 && root.systemUptimeStr !== "") ? i18n("Uptime: %1", root.systemUptimeStr) : ""
+                extraText: ""
                 onSortClicked: {
                     if (root.sortColumn === "name") {
                         root.sortAscending = !root.sortAscending;
@@ -561,27 +645,6 @@ Item {
                         listView.contentY = position * listView.contentHeight;
 
                 }
-            }
-
-        }
-
-        RowLayout {
-            id: uptimeRow
-
-            Layout.fillWidth: true
-            visible: root.uptimeDisplayMode === 2 && root.systemUptimeStr !== ""
-            spacing: Kirigami.Units.smallSpacing
-
-            QQC2.Label {
-                id: uptimeLabel
-
-                Layout.fillWidth: true
-                horizontalAlignment: Text.AlignHCenter
-                text: i18n("System Uptime: %1", root.systemUptimeStr)
-                font.pointSize: Kirigami.Theme.defaultFont.pointSize * 0.9
-                font.italic: true
-                color: Kirigami.Theme.textColor
-                opacity: 0.8
             }
 
         }
