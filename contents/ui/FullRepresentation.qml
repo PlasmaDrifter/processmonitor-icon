@@ -401,8 +401,8 @@ Item {
 
             Layout.fillWidth: true
             visible: (root.uptimeDisplayMode !== 0 && root.systemUptimeStr !== "") || root.cpuTempStr !== "" || root.gpuTempStr !== ""
-            Layout.leftMargin: Kirigami.Units.smallSpacing + Kirigami.Units.iconSizes.small + Kirigami.Units.smallSpacing
-            Layout.rightMargin: Kirigami.Units.smallSpacing
+            Layout.leftMargin: Kirigami.Units.smallSpacing * 2
+            Layout.rightMargin: Kirigami.Units.smallSpacing * 2 + (Kirigami.Units.iconSizes.smallMedium + Kirigami.Units.smallSpacing * 2) / 2
 
             QQC2.Label {
                 id: uptimeLabel
@@ -445,19 +445,14 @@ Item {
             spacing: Kirigami.Units.smallSpacing
             Layout.fillWidth: true
             Layout.preferredHeight: Kirigami.Units.gridUnit * 1.8
-            Layout.leftMargin: Kirigami.Units.smallSpacing
-            Layout.rightMargin: Kirigami.Units.smallSpacing
-
-            Item {
-                Layout.preferredWidth: Kirigami.Units.iconSizes.small
-                Layout.preferredHeight: Kirigami.Units.iconSizes.small
-            }
+            Layout.leftMargin: Kirigami.Units.smallSpacing * 2
+            Layout.rightMargin: Kirigami.Units.smallSpacing * 2
 
             SortHeader {
                 id: nameHeader
 
                 Layout.fillWidth: true
-                label: i18n("Name")
+                label: i18n("Process Name")
                 col: "name"
                 alignment: Qt.AlignLeft
                 extraText: ""
