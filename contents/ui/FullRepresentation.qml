@@ -46,6 +46,8 @@ Item {
     property var rows: []
     property var vmRows: []
     property var browserProfileRows: []
+    property var prevCpuTicks: ({})
+    property real lastCpuPollTime: 0
     property bool firstUpdatePending: false
     property string systemUptimeStr: ""
     property string cpuTempStr: ""
@@ -158,7 +160,7 @@ Item {
                 "appName": appName,
                 "iconName": iconName,
                 "cpuFmt": scaledVal.toFixed(1) + "%",
-                "cpuRaw": rawVal,
+                "cpuRaw": scaledVal,
                 "memFmt": memFmt,
                 "memVal": root.parseMemoryBytes(memFmt),
                 "pids": pids
@@ -216,7 +218,7 @@ Item {
                 "appName": vmName + " (VM)",
                 "iconName": "virt-manager",
                 "cpuFmt": scaledCpu.toFixed(1) + "%",
-                "cpuRaw": cpuRaw,
+                "cpuRaw": scaledCpu,
                 "memFmt": memFmt,
                 "memVal": rssKb * 1024,
                 "pids": [pid]
@@ -227,7 +229,7 @@ Item {
     }
 
     function parseTemps(stdout) {
-        var parts = stdout.trim().split(/\s+/);
+        var parts = stdout.trim().split("\n");
         if (parts.length >= 2) {
             var cpuRaw = parseFloat(parts[0]);
             var gpuRaw = parseFloat(parts[1]);
@@ -262,6 +264,10 @@ Item {
             psOutput = stdout;
         }
 
+        var now = Date.now();
+        var dt = root.lastCpuPollTime > 0 ? Math.max(0.1, (now - root.lastCpuPollTime) / 1000.0) : 1.0;
+        var nextCpuTicks = {};
+
         var lines = psOutput.trim().split("\n");
         var profiles = {};
         var pidToProfKey = {};
@@ -276,9 +282,15 @@ Item {
 
             var pid = parseInt(parts[0]);
             var ppid = parseInt(parts[1]);
-            var cpu = parseFloat(parts[2]) || 0;
+            var times = parseInt(parts[2]) || 0;
             var rssKb = parseFloat(parts[3]) || 0;
             var argStr = parts.slice(4).join(" ");
+
+            // Compute real-time instantaneous CPU utilization for this process
+            var prevTicks = (root.prevCpuTicks && root.prevCpuTicks[pid] !== undefined) ? root.prevCpuTicks[pid] : times;
+            var tickDelta = Math.max(0, times - prevTicks);
+            var cpuInst = (tickDelta / 100.0) / dt * 100.0;
+            nextCpuTicks[pid] = times;
 
             if (argStr.indexOf("-contentproc") === -1 && argStr.indexOf("--type=") === -1) {
                 var profName = "Default";
@@ -335,7 +347,7 @@ Item {
                         "appTitle": appTitle
                     };
                 }
-                profiles[profKey].cpuRaw += cpu;
+                profiles[profKey].cpuRaw += cpuInst;
                 profiles[profKey].rssKb += rssKb;
                 profiles[profKey].pids.push(pid);
                 pidToProfKey[pid] = profKey;
@@ -349,11 +361,14 @@ Item {
                     "pid": pid,
                     "ppid": ppid,
                     "parentArg": parentArg,
-                    "cpu": cpu,
+                    "cpu": cpuInst,
                     "rssKb": rssKb
                 });
             }
         }
+
+        root.prevCpuTicks = nextCpuTicks;
+        root.lastCpuPollTime = now;
 
         for (var j = 0; j < children.length; j++) {
             var c = children[j];
@@ -379,7 +394,7 @@ Item {
                 "appName": pObj.appName,
                 "iconName": pObj.iconName,
                 "cpuFmt": scaledCpu.toFixed(1) + "%",
-                "cpuRaw": pObj.cpuRaw,
+                "cpuRaw": scaledCpu,
                 "memFmt": memFmt,
                 "memVal": pObj.rssKb * 1024,
                 "pids": pObj.pids,
@@ -566,7 +581,7 @@ Item {
         id: browserProfileSource
 
         function fetchBrowserProfiles() {
-            connectSource("python3 -c \"import subprocess, glob, json, os, re; ps_out = subprocess.check_output(['ps','-C','zen-bin,zen,firefox,chrome,brave,chromium','-o','pid,ppid,%cpu,rss,args','--no-headers'], text=True); icons = {}; [icons.update({wm.group(1).strip().lower(): ic.group(1).strip()}) for path in glob.glob(os.path.expanduser('~/.local/share/applications/*.desktop')) + glob.glob('/usr/share/applications/*.desktop') for content in [open(path, errors='ignore').read()] for wm in [re.search(r'^StartupWMClass=(.*)$', content, re.M)] if wm for ic in [re.search(r'^Icon=(.*)$', content, re.M)] if ic]; print(json.dumps({'ps': ps_out, 'icons': icons}))\" 2>/dev/null || true");
+            connectSource("python3 -c \"import glob, os, re, json; procs = []; [procs.append(f'{pid} {int(ap[1])} {int(ap[11])+int(ap[12])} {pss} {cmd}') for p in glob.glob('/proc/[0-9]*') for pid in [int(os.path.basename(p))] if os.path.exists(f'/proc/{pid}/cmdline') and os.path.exists(f'/proc/{pid}/stat') for cmd in [open(f'/proc/{pid}/cmdline').read().replace('\\x00',' ')] if any(b in cmd for b in ['zen-bin','firefox','chrome','brave','chromium']) and 'antigravity' not in cmd for s in [open(f'/proc/{pid}/stat').read()] for ap in [s[s.rfind(')')+2:].split()] if len(ap)>=22 for pss in [next((int(line.split()[1]) for line in open(f'/proc/{pid}/smaps_rollup') if line.startswith('Pss:')), int(ap[21])*4) if os.path.exists(f'/proc/{pid}/smaps_rollup') else int(ap[21])*4]]; ps_out = '\\n'.join(procs); icons = {}; [icons.update({wm.group(1).strip().lower(): ic.group(1).strip()}) for path in glob.glob(os.path.expanduser('~/.local/share/applications/*.desktop')) + glob.glob('/usr/share/applications/*.desktop') if os.path.exists(path) for content in [open(path, errors='ignore').read()] for wm in [re.search(r'^StartupWMClass=(.*)$', content, re.M)] if wm for ic in [re.search(r'^Icon=(.*)$', content, re.M)] if ic]; print(json.dumps({'ps': ps_out, 'icons': icons}))\" 2>/dev/null || true");
         }
 
         engine: "executable"
