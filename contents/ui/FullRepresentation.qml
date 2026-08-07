@@ -45,6 +45,7 @@ Item {
     property bool sortAscending: false
     property var rows: []
     property var vmRows: []
+    property var browserProfileRows: []
     property bool firstUpdatePending: false
     property string systemUptimeStr: ""
     property string cpuTempStr: ""
@@ -113,6 +114,21 @@ Item {
             root.systemUptimeStr = "";
 
         var out = [];
+        var handledBrowserTitles = {};
+        if (root.browserProfileRows && root.browserProfileRows.length > 0) {
+            for (var b = 0; b < root.browserProfileRows.length; b++) {
+                out.push(root.browserProfileRows[b]);
+                if (root.browserProfileRows[b].appTitle) {
+                    var tLower = root.browserProfileRows[b].appTitle.toLowerCase();
+                    handledBrowserTitles[tLower] = true;
+                    if (tLower.indexOf("zen") !== -1) handledBrowserTitles["zen"] = true;
+                    if (tLower.indexOf("firefox") !== -1) handledBrowserTitles["firefox"] = true;
+                    if (tLower.indexOf("chrome") !== -1) handledBrowserTitles["chrome"] = true;
+                    if (tLower.indexOf("brave") !== -1) handledBrowserTitles["brave"] = true;
+                }
+            }
+        }
+
         var n = appModel.rowCount();
         for (var i = 0; i < n; i++) {
             var nameIdx = appModel.index(i, root.colName);
@@ -120,6 +136,15 @@ Item {
             var cpuIdx = appModel.index(i, root.colCpu);
             var memIdx = appModel.index(i, root.colMem);
             var appName = String(appModel.data(nameIdx, Process.ProcessDataModel.Value) || "");
+
+            var appLower = appName.toLowerCase();
+            if ((appLower.indexOf("zen") !== -1 && handledBrowserTitles["zen"]) ||
+                (appLower.indexOf("firefox") !== -1 && handledBrowserTitles["firefox"]) ||
+                (appLower.indexOf("chrome") !== -1 && handledBrowserTitles["chrome"]) ||
+                (appLower.indexOf("brave") !== -1 && handledBrowserTitles["brave"])) {
+                continue;
+            }
+
             var iconName = String(appModel.data(iconIdx, Process.ProcessDataModel.Value) || "application-x-executable");
             var cpuRaw = String(appModel.data(cpuIdx, Process.ProcessDataModel.FormattedValue) || "0.0 %");
             var memFmt = String(appModel.data(memIdx, Process.ProcessDataModel.FormattedValue) || "–");
@@ -220,6 +245,153 @@ Item {
         }
     }
 
+    function parseBrowserProfiles(stdout) {
+        if (!stdout) {
+            root.browserProfileRows = [];
+            root.rebuildRows();
+            return;
+        }
+
+        var psOutput = "";
+        var desktopIcons = {};
+        try {
+            var parsed = JSON.parse(stdout);
+            psOutput = parsed.ps || "";
+            desktopIcons = parsed.icons || {};
+        } catch(e) {
+            psOutput = stdout;
+        }
+
+        var lines = psOutput.trim().split("\n");
+        var profiles = {};
+        var pidToProfKey = {};
+        var children = [];
+
+        for (var i = 0; i < lines.length; i++) {
+            var line = lines[i].trim();
+            if (!line) continue;
+
+            var parts = line.split(/\s+/);
+            if (parts.length < 5) continue;
+
+            var pid = parseInt(parts[0]);
+            var ppid = parseInt(parts[1]);
+            var cpu = parseFloat(parts[2]) || 0;
+            var rssKb = parseFloat(parts[3]) || 0;
+            var argStr = parts.slice(4).join(" ");
+
+            if (argStr.indexOf("-contentproc") === -1 && argStr.indexOf("--type=") === -1) {
+                var profName = "Default";
+                var wmClass = "";
+                var m = argStr.match(/--name\s+([^\s]+)/);
+                if (m) {
+                    profName = m[1];
+                    wmClass = m[1];
+                } else {
+                    m = argStr.match(/-P\s+([^\s]+)/);
+                    if (m) {
+                        profName = m[1];
+                    } else {
+                        m = argStr.match(/-profile\s+([^\s]+)/);
+                        if (m) {
+                            var pPath = m[1].replace(/\/+$/, '');
+                            var lastSlash = pPath.lastIndexOf("/");
+                            profName = lastSlash >= 0 ? pPath.substring(lastSlash + 1) : pPath;
+                        }
+                    }
+                }
+
+                var appTitle = "Zen";
+                var iconName = "zen-browser";
+                if (argStr.indexOf("firefox") !== -1) {
+                    appTitle = "Firefox";
+                    iconName = "firefox";
+                } else if (argStr.indexOf("chrome") !== -1) {
+                    appTitle = "Chrome";
+                    iconName = "google-chrome";
+                } else if (argStr.indexOf("brave") !== -1) {
+                    appTitle = "Brave";
+                    iconName = "brave-browser";
+                }
+
+                // Check for custom icon from desktop shortcuts
+                var lookupKey = wmClass ? wmClass.toLowerCase() : profName.toLowerCase();
+                if (desktopIcons[lookupKey]) {
+                    iconName = desktopIcons[lookupKey];
+                } else if (wmClass && desktopIcons["zen-" + lookupKey]) {
+                    iconName = desktopIcons["zen-" + lookupKey];
+                } else if (desktopIcons[appTitle.toLowerCase()]) {
+                    iconName = desktopIcons[appTitle.toLowerCase()];
+                }
+
+                var profKey = (appTitle + ":" + profName).toLowerCase();
+                if (!profiles[profKey]) {
+                    profiles[profKey] = {
+                        "appName": appTitle + " (" + profName + ")",
+                        "iconName": iconName,
+                        "cpuRaw": 0,
+                        "rssKb": 0,
+                        "pids": [],
+                        "appTitle": appTitle
+                    };
+                }
+                profiles[profKey].cpuRaw += cpu;
+                profiles[profKey].rssKb += rssKb;
+                profiles[profKey].pids.push(pid);
+                pidToProfKey[pid] = profKey;
+            } else {
+                var parentArg = null;
+                var pm = argStr.match(/-parentPid\s+(\d+)/);
+                if (pm) {
+                    parentArg = parseInt(pm[1]);
+                }
+                children.push({
+                    "pid": pid,
+                    "ppid": ppid,
+                    "parentArg": parentArg,
+                    "cpu": cpu,
+                    "rssKb": rssKb
+                });
+            }
+        }
+
+        for (var j = 0; j < children.length; j++) {
+            var c = children[j];
+            var matchedKey = (c.parentArg && pidToProfKey[c.parentArg]) ? pidToProfKey[c.parentArg] : (pidToProfKey[c.ppid] ? pidToProfKey[c.ppid] : null);
+            if (matchedKey && profiles[matchedKey]) {
+                profiles[matchedKey].cpuRaw += c.cpu;
+                profiles[matchedKey].rssKb += c.rssKb;
+                profiles[matchedKey].pids.push(c.pid);
+            }
+        }
+
+        var temp = [];
+        var keys = Object.keys(profiles);
+        for (var k = 0; k < keys.length; k++) {
+            var pObj = profiles[keys[k]];
+            var scaledCpu = pObj.cpuRaw / root.cpuCoreCount;
+            if (isNaN(scaledCpu) || !isFinite(scaledCpu)) scaledCpu = 0;
+
+            var memGb = pObj.rssKb / (1024 * 1024);
+            var memFmt = memGb >= 1 ? memGb.toFixed(1) + " GiB" : (pObj.rssKb / 1024).toFixed(0) + " MiB";
+
+            temp.push({
+                "appName": pObj.appName,
+                "iconName": pObj.iconName,
+                "cpuFmt": scaledCpu.toFixed(1) + "%",
+                "cpuRaw": pObj.cpuRaw,
+                "memFmt": memFmt,
+                "memVal": pObj.rssKb * 1024,
+                "pids": pObj.pids,
+                "isBrowserProfile": true,
+                "appTitle": pObj.appTitle
+            });
+        }
+
+        root.browserProfileRows = temp;
+        root.rebuildRows();
+    }
+
     implicitWidth: Kirigami.Units.gridUnit * 32
     implicitHeight: popupHeight
     Layout.preferredWidth: implicitWidth
@@ -236,6 +408,7 @@ Item {
 
             vmSource.fetchVMs();
             tempSource.fetchTemps();
+            browserProfileSource.fetchBrowserProfiles();
         }
     }
     onSortColumnChanged: rebuildRows()
@@ -280,16 +453,16 @@ Item {
         }
         Component.onCompleted: root.rebuildRows()
         onModelReset: {
-            debounceTimer.restart();
+            if (root.isWindowVisible) debounceTimer.restart();
         }
         onRowsInserted: {
-            debounceTimer.restart();
+            if (root.isWindowVisible) debounceTimer.restart();
         }
         onRowsRemoved: {
-            debounceTimer.restart();
+            if (root.isWindowVisible) debounceTimer.restart();
         }
         onDataChanged: {
-            if (root.firstUpdatePending) {
+            if (root.isWindowVisible && root.firstUpdatePending) {
                 root.firstUpdatePending = false;
                 firstUpdateTimer.restart();
             }
@@ -327,6 +500,7 @@ Item {
         onTriggered: {
             vmSource.fetchVMs();
             tempSource.fetchTemps();
+            browserProfileSource.fetchBrowserProfiles();
             root.rebuildRows();
         }
     }
@@ -385,6 +559,22 @@ Item {
             disconnectSource(source);
             var stdout = data["stdout"] || "";
             root.parseTemps(stdout);
+        }
+    }
+
+    Plasma5Support.DataSource {
+        id: browserProfileSource
+
+        function fetchBrowserProfiles() {
+            connectSource("python3 -c \"import subprocess, glob, json, os, re; ps_out = subprocess.check_output(['ps','-C','zen-bin,zen,firefox,chrome,brave,chromium','-o','pid,ppid,%cpu,rss,args','--no-headers'], text=True); icons = {}; [icons.update({wm.group(1).strip().lower(): ic.group(1).strip()}) for path in glob.glob(os.path.expanduser('~/.local/share/applications/*.desktop')) + glob.glob('/usr/share/applications/*.desktop') for content in [open(path, errors='ignore').read()] for wm in [re.search(r'^StartupWMClass=(.*)$', content, re.M)] if wm for ic in [re.search(r'^Icon=(.*)$', content, re.M)] if ic]; print(json.dumps({'ps': ps_out, 'icons': icons}))\" 2>/dev/null || true");
+        }
+
+        engine: "executable"
+        connectedSources: []
+        onNewData: function(source, data) {
+            disconnectSource(source);
+            var stdout = data["stdout"] || "";
+            root.parseBrowserProfiles(stdout);
         }
     }
 
